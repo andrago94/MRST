@@ -1,0 +1,19 @@
+# MATLAB auto-save and temporary files
+*.asv
+*.m~
+
+# MATLAB binary data (simulation output)
+*.mat
+
+# Simulation output directory
+output/
+
+# MRST settings written at runtime
+settings.mat
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/

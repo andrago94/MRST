@@ -1,0 +1,7 @@
+# MATLAB source files – keep LF line endings everywhere
+*.m    text eol=lf
+
+# Standard text files
+*.md   text eol=lf
+*.txt  text eol=lf
+.gitignore text eol=lf
