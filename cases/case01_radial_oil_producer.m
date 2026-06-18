@@ -44,12 +44,19 @@ fprintf('  eta = %.4f ft^2/s\n', eta);
 fprintf('  dr  = %.3f ft   (%d radial cells)\n', dr_ft, G.radial.Nr);
 
 %% -------------------------------------------------------------------------
-%  4.  Rock and single-phase oil fluid
+%  4.  Rock, compressible fluid, and reservoir model
 % --------------------------------------------------------------------------
 rock  = makeHomogeneousRock(G, k_mD, phi);
 
-fluid = initSingleFluid('mu',  mu_o_cP    * centi * poise, ...
-                         'rho', rho_o_lbft * pound / ft^3);
+% Slightly compressible oil: bO(p) = exp(c*(p - pRef))
+fluid = initSimpleADIFluid(...
+    'phases', 'O', ...
+    'mu',     mu_o_cP    * centi * poise, ...
+    'rho',    rho_o_lbft * pound / ft^3,  ...
+    'c',      ct_psi     / psia,          ...
+    'pRef',   p_e_psia   * psia);
+
+model = GenericBlackOilModel(G, rock, fluid, 'water', false, 'gas', false);
 
 %% -------------------------------------------------------------------------
 %  5.  Well: BHP-controlled producer in the innermost radial ring
@@ -84,29 +91,29 @@ outer_faces = find(bf & fr >= (re_ft * ft) * (1 - 1e-6));
 bc = addBC([], outer_faces, 'pressure', p_e_psia * psia, 'sat', 1);
 
 %% -------------------------------------------------------------------------
-%  7.  Initial state and transmissibilities
+%  7.  Initial state
 % --------------------------------------------------------------------------
-state = initState(G, W, p_e_psia * psia, 1);   % uniform pressure, all oil
-hT    = computeTrans(G, rock);
+state0 = initState(G, W, p_e_psia * psia, 1);   % uniform pressure, all oil
 
 %% -------------------------------------------------------------------------
-%  8.  Time loop: 300 steps × dt_sim seconds
-%      Note: incompTPFA is instantaneous (no accumulation term), so rate and
-%      BHP are constant after step 1.  The loop structure is here for when a
-%      compressible solver is added.
+%  8.  Compressible transient simulation: 300 steps × dt_sim seconds
 % --------------------------------------------------------------------------
-nstep  = 300;
-t_s    = (1 : nstep)' .* dt_sim;   % time vector [s]
-Q_t    = zeros(nstep, 1);           % rate [STB/day]
-bhp_t  = zeros(nstep, 1);           % BHP  [psia]
+nstep    = 300;
+t_s      = (1 : nstep)' .* dt_sim;               % time axis [s]
 
+dt_vec   = repmat(dt_sim * second, nstep, 1);
+schedule = simpleSchedule(dt_vec, 'W', W, 'bc', bc);
+
+[~, states] = simulateScheduleAD(state0, model, schedule);
+
+Q_t    = zeros(nstep, 1);   % rate [STB/day]
+bhp_t  = zeros(nstep, 1);   % BHP  [psia]
 for i = 1 : nstep
-    state    = incompTPFA(state, G, hT, fluid, 'wells', W, 'bc', bc);
-    Q_t(i)   = convertTo(-sum(state.wellSol(1).flux), stb / day);
-    bhp_t(i) = convertTo(state.wellSol(1).bhp, psia);
+    Q_t(i)   = convertTo(-states{i}.wellSol(1).qOs, stb / day);
+    bhp_t(i) = convertTo( states{i}.wellSol(1).bhp,  psia);
 end
 
-fprintf('\nTime loop: %d steps x %.0f s = %.0f s total\n', nstep, dt_sim, nstep*dt_sim);
+fprintf('\nSimulation: %d steps × %.0f s = %.0f s total\n', nstep, dt_sim, nstep*dt_sim);
 
 %% -------------------------------------------------------------------------
 %  9.  Analytical solution  (Dupuit-Thiem)
@@ -128,7 +135,7 @@ Q_ana_STBd = convertTo(Q_ana_SI, stb / day);
 %  10. Extract MRST pressure profile  (azimuthal average per radial ring)
 % --------------------------------------------------------------------------
 [rc_s, ord] = sort(rc);
-p_s         = state.pressure(ord);
+p_s         = states{end}.pressure(ord);
 Nt          = G.radial.Ntheta;
 Nr          = G.radial.Nr;
 

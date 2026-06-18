@@ -10,7 +10,7 @@ Physics: incompressible single-phase oil flow in a cylindrical radial grid.
 | MATLAB R2025b | `C:\Program Files\MATLAB\R2025b` |
 | MRST 2025b | `C:\Users\ander\Documents\SINTEF-AppliedCompSci-MRST-b941a92` |
 
-MRST modules used: `incomp`, `mrst-gui`  
+MRST modules used: `incomp`, `ad-core`, `ad-blackoil`, `mrst-gui`  
 Core MRST functions (`tensorGrid`, `computeGeometry`, `computeTrans`, `addWell`, `addBC`, `initState`) are in the MRST core and require no extra module.
 
 ## Starting a session
@@ -77,22 +77,28 @@ Grid is built with `tensorGrid` in `(theta, r, z)` space, then nodes are transfo
 
 ## Simulation workflows
 
-**Single-phase (steady-state) — one solve:**
+**Compressible single-phase — schedule + AD solver (current approach):**
+```matlab
+% Fluid: slightly compressible oil; bO(p) = exp(c*(p-pRef))
+fluid = initSimpleADIFluid('phases','O', 'mu',mu_SI, 'rho',rho_SI, ...
+    'c',ct_psi/psia, 'pRef',p_e_psia*psia);
+model = GenericBlackOilModel(G, rock, fluid, 'water',false, 'gas',false);
+
+state0   = initState(G, W, p_e_psia*psia, 1);
+dt_vec   = repmat(dt_sim*second, nstep, 1);
+schedule = simpleSchedule(dt_vec, 'W', W, 'bc', bc);
+[~, states] = simulateScheduleAD(state0, model, schedule);
+
+% Extract rate and BHP per step
+Q_t(i)   = convertTo(-states{i}.wellSol(1).qOs, stb/day);
+bhp_t(i) = convertTo( states{i}.wellSol(1).bhp,  psia);
+```
+
+**Incompressible steady-state — single solve (for validation only):**
 ```matlab
 hT    = computeTrans(G, rock);
 state = incompTPFA(state, G, hT, fluid, 'wells', W, 'bc', bc);
 ```
-
-**Two-phase (sequential splitting) — time loop:**
-```matlab
-hT = computeTrans(G, rock);          % once before the loop
-for i = 1 : nstep
-    state = incompTPFA(state, G, hT, fluid, 'wells', W, 'bc', bc);
-    state = implicitTransport(state, G, dt_sim*second, rock, fluid, 'wells', W, 'bc', bc);
-end
-```
-
-Note: `incompTPFA` and `implicitTransport` use lowercase `'wells'` key.
 
 **Well index on radial grid (analytical Peaceman — avoids ip_tpf failure on cylindrical cells):**
 ```matlab

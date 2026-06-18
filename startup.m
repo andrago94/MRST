@@ -7,7 +7,7 @@
 %
 % What it does:
 %   1. Locates and initialises MRST 2025b.
-%   2. Loads the modules required for incompressible 2-phase radial simulation.
+%   2. Loads the modules required for compressible single-phase radial simulation.
 %   3. Adds the project sub-folders to the MATLAB path.
 
 mrstRoot = 'C:\Users\ander\Documents\SINTEF-AppliedCompSci-MRST-b941a92';
@@ -19,6 +19,8 @@ end
 
 % Core physics modules
 mrstModule add incomp
+mrstModule add ad-core
+mrstModule add ad-blackoil
 
 % Visualisation (comment out if running headless)
 mrstModule add mrst-gui
@@ -30,4 +32,4 @@ for d = {'grid', 'rock', 'fluid', 'wells', 'utils', 'cases'}
 end
 
 fprintf('\nProject startup complete.\n');
-fprintf('  case01_radial_waterflood  –  1-D radial two-phase waterflood\n\n');
+fprintf('  case01_radial_oil_producer  –  compressible single-phase radial well test\n\n');
