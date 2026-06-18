@@ -90,9 +90,23 @@ state = initState(G, W, p_e_psia * psia, 1);   % uniform pressure, all oil
 hT    = computeTrans(G, rock);
 
 %% -------------------------------------------------------------------------
-%  8.  Single pressure solve  (incompressible steady-state)
+%  8.  Time loop: 300 steps × dt_sim seconds
+%      Note: incompTPFA is instantaneous (no accumulation term), so rate and
+%      BHP are constant after step 1.  The loop structure is here for when a
+%      compressible solver is added.
 % --------------------------------------------------------------------------
-state = incompTPFA(state, G, hT, fluid, 'wells', W, 'bc', bc);
+nstep  = 300;
+t_s    = (1 : nstep)' .* dt_sim;   % time vector [s]
+Q_t    = zeros(nstep, 1);           % rate [STB/day]
+bhp_t  = zeros(nstep, 1);           % BHP  [psia]
+
+for i = 1 : nstep
+    state    = incompTPFA(state, G, hT, fluid, 'wells', W, 'bc', bc);
+    Q_t(i)   = convertTo(-sum(state.wellSol(1).flux), stb / day);
+    bhp_t(i) = convertTo(state.wellSol(1).bhp, psia);
+end
+
+fprintf('\nTime loop: %d steps x %.0f s = %.0f s total\n', nstep, dt_sim, nstep*dt_sim);
 
 %% -------------------------------------------------------------------------
 %  9.  Analytical solution  (Dupuit-Thiem)
@@ -157,3 +171,25 @@ title(sprintf('Steady-state radial flow  (k = %d mD,  Q \\approx %.0f STB/day)',
 legend('Location', 'northwest');
 grid on;
 xlim([rw_ft, re_ft]);
+
+%% -------------------------------------------------------------------------
+%  12. Plot: rate and BHP vs time
+% --------------------------------------------------------------------------
+figure('Name', 'Radial Oil Producer – Production History');
+
+subplot(2, 1, 1);
+plot(t_s, Q_t, 'b-', 'LineWidth', 1.5);
+xlabel('Time  [s]');
+ylabel('Rate  [STB/day]');
+title(sprintf('Production rate  (k = %d mD,  \\DeltaP = %.0f psia)', ...
+    k_mD, p_e_psia - p_bhp_psia));
+yline(Q_ana_STBd, 'k--', 'Dupuit-Thiem', 'LabelHorizontalAlignment', 'left');
+grid on;
+
+subplot(2, 1, 2);
+plot(t_s, bhp_t, 'r-', 'LineWidth', 1.5);
+xlabel('Time  [s]');
+ylabel('BHP  [psia]');
+title('Bottomhole pressure');
+yline(p_bhp_psia, 'k--', 'Target BHP', 'LabelHorizontalAlignment', 'left');
+grid on;
