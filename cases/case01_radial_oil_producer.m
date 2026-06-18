@@ -18,14 +18,14 @@ gravity off
 % --------------------------------------------------------------------------
 k_mD       = 100;     % permeability                          [mD]
 phi        = 0.20;    % porosity                              [-]
-mu_o_cP    = 5.0;     % oil viscosity                         [cP]
+mu_o_cP    = 1.0;     % oil viscosity                         [cP]
 rho_o_lbft = 50.0;    % oil density                           [lb/ft^3]
-ct_psi     = 1e-5;    % total compressibility – grid design only  [1/psi]
+ct_psi     = 6e-6;    % total compressibility – grid design only  [1/psi]
 H_ft       = 65;      % formation thickness                   [ft]
-rw_ft      = 0.333;   % wellbore radius                       [ft]
+rw_ft      = 0.5;     % wellbore radius                       [ft]
 re_ft      = 1640;    % outer boundary radius                 [ft]
-p_e_psia   = 2900;    % initial / outer-boundary pressure     [psia]
-p_bhp_psia = 2000;    % producer bottomhole pressure          [psia]
+p_e_psia   = 23000;    % initial / outer-boundary pressure     [psia]
+p_bhp_psia = 21000;    % producer bottomhole pressure          [psia]
 
 %% -------------------------------------------------------------------------
 %  2.  Time stepping  (seconds — tied to grid cell size)
@@ -58,13 +58,21 @@ rc         = sqrt(G.cells.centroids(:,1).^2 + G.cells.centroids(:,2).^2);
 r_min      = min(rc);
 prod_cells = find(abs(rc - r_min) < 1e-3 * (re_ft * ft));
 
-W = addWell([], G, rock, prod_cells,         ...
-    'Type',         'bhp',                   ...
-    'Val',          p_bhp_psia * psia,        ...
-    'Comp_i',       1,                        ...
-    'InnerProduct', 'ip_tpf',                ...
-    'Radius',       rw_ft * ft,              ...
-    'Name',         'PROD');
+% Analytical Peaceman WI for radial geometry — bypasses computeWellIndex,
+% which fails on cylindrical cells (non-Cartesian extents).
+%   WI_total = 2*pi*k*H / ln(r_centroid/rw)
+%   WI_cell  = WI_total / Ntheta  (Ntheta equal wedge cells share the ring)
+r_c_ft  = rw_ft + dr_ft / 2;
+WI_cell = 2*pi * (k_mD * milli * darcy) * (H_ft * ft) / ...
+          (G.radial.Ntheta * log(r_c_ft / rw_ft));
+
+W = addWell([], G, rock, prod_cells,    ...
+    'Type',   'bhp',                    ...
+    'Val',    p_bhp_psia * psia,         ...
+    'Comp_i', 1,                         ...
+    'WI',     repmat(WI_cell, numel(prod_cells), 1), ...
+    'Radius', rw_ft * ft,               ...
+    'Name',   'PROD');
 
 %% -------------------------------------------------------------------------
 %  6.  Boundary condition: constant pressure at outer radial ring

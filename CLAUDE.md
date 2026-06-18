@@ -94,6 +94,16 @@ end
 
 Note: `incompTPFA` and `implicitTransport` use lowercase `'wells'` key.
 
+**Well index on radial grid (analytical Peaceman — avoids ip_tpf failure on cylindrical cells):**
+```matlab
+% ip_tpf calls connection_dimensions which fails on wedge-shaped radial cells.
+% Pass WI explicitly instead:
+r_c_ft  = rw_ft + dr_ft / 2;
+WI_cell = 2*pi * (k_mD*milli*darcy) * (H_ft*ft) / (Ntheta * log(r_c_ft/rw_ft));
+W = addWell([], G, rock, prod_cells, 'Type','bhp', 'Val', p_bhp*psia, ...
+    'Comp_i',1, 'WI', repmat(WI_cell,numel(prod_cells),1), 'Radius',rw_ft*ft);
+```
+
 **Single-phase fluid:**
 ```matlab
 fluid = initSingleFluid('mu', mu_o_cP * centi * poise, 'rho', rho_o * pound / ft^3);
