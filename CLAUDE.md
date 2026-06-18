@@ -1,7 +1,7 @@
 # MRST Radial Simulation Deck
 
 MATLAB reservoir simulation project built on top of **MRST 2025b** (SINTEF open-source toolkit).  
-Physics: incompressible two-phase (water/oil) flow in a cylindrical radial grid.
+Physics: incompressible single-phase oil flow in a cylindrical radial grid.
 
 ## Prerequisites
 
@@ -30,7 +30,7 @@ c:\MRST\
 ├── startup.m                          Session initialiser
 ├── grid/
 │   ├── buildRadialGrid.m              Core grid builder (see Grid section)
-│   └── computeHydraulicDiffusivity.m  eta = k/(phi*mu*ct) [ft^2/day]
+│   └── computeHydraulicDiffusivity.m  eta = k/(phi*mu*ct) [ft^2/s]
 ├── rock/
 │   └── makeHomogeneousRock.m          Uniform perm [mD] + porosity
 ├── fluid/
@@ -54,11 +54,11 @@ All user-facing function signatures accept **oil-field (imperial) units**:
 | Density | lb/ft³ | kg/m³ |
 | Pressure | psia | Pa |
 | Rate | STB/day | m³/s |
-| Time | day | s |
-| Diffusivity | ft²/day | m²/s |
+| Time | s | s |
+| Diffusivity | ft²/s | m²/s |
 | Compressibility | 1/psi | 1/Pa |
 
-Conversions use MRST's own unit functions (`ft`, `psia`, `stb`, `darcy`, `milli`, `centi`, `poise`, `pound`, `day`).  
+Conversions use MRST's own unit functions (`ft`, `psia`, `stb`, `darcy`, `milli`, `centi`, `poise`, `pound`, `day`, `second`).  
 **Never hardcode conversion factors** — always use MRST unit functions.
 
 ## Grid spacing formula
@@ -66,12 +66,12 @@ Conversions use MRST's own unit functions (`ft`, `psia`, `stb`, `darcy`, `milli`
 The central design concept: cell width is set by the hydraulic diffusion length for a chosen reference time.
 
 ```
-dr [ft] = sqrt(eta [ft²/day] * dt_grid [day])
+dr [ft] = sqrt(eta [ft²/s] * dt_grid [s])
 eta     = k / (phi * mu * ct)          -- computeHydraulicDiffusivity
 ```
 
 `dt_grid` is a **grid-design parameter**, not the simulation time step.  
-Smaller `dt_grid` → finer grid. Typical usage: set `dt_grid` so that `Nr` (radial cell count) is 15–50.
+Smaller `dt_grid` → finer grid. For short-term well tests, set `dt_grid = dt_sim` (both in seconds) to tie cell size directly to the simulation time step.
 
 Grid is built with `tensorGrid` in `(theta, r, z)` space, then nodes are transformed to Cartesian `(x, y, z)` before `computeGeometry`.  MRST grid coordinates are always meters.
 
@@ -88,7 +88,7 @@ state = incompTPFA(state, G, hT, fluid, 'wells', W, 'bc', bc);
 hT = computeTrans(G, rock);          % once before the loop
 for i = 1 : nstep
     state = incompTPFA(state, G, hT, fluid, 'wells', W, 'bc', bc);
-    state = implicitTransport(state, G, dt_sim*day, rock, fluid, 'wells', W, 'bc', bc);
+    state = implicitTransport(state, G, dt_sim*second, rock, fluid, 'wells', W, 'bc', bc);
 end
 ```
 

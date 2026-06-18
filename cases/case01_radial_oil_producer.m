@@ -8,7 +8,7 @@
 %      Q    = 2*pi*k*H*(p_e - p_bhp) / (mu * ln(re/rw))
 %
 %  Grid spacing:
-%      dr [ft] = sqrt(eta [ft^2/day] * dt_grid [day]),  eta = k/(phi*mu*ct)
+%      dr [ft] = sqrt(eta [ft^2/s] * dt_grid [s]),  eta = k/(phi*mu*ct)
 
 run('c:\MRST\startup.m');
 gravity off
@@ -28,19 +28,23 @@ p_e_psia   = 2900;    % initial / outer-boundary pressure     [psia]
 p_bhp_psia = 2000;    % producer bottomhole pressure          [psia]
 
 %% -------------------------------------------------------------------------
-%  2.  Build diffusion-optimal radial grid
-%      dr [ft] = sqrt(eta [ft^2/day] * dt_grid [day])
+%  2.  Time stepping  (seconds — tied to grid cell size)
 % --------------------------------------------------------------------------
-dt_grid    = 0.01;    % reference time for grid spacing  [day]  (14.4 min)
+dt_grid = 1;          % grid-spacing reference time  [s]  -->  dr = sqrt(eta*dt_grid)
+dt_sim  = 1;          % simulation time step         [s]  =  dt_grid for well tests
 
+%% -------------------------------------------------------------------------
+%  3.  Build diffusion-optimal radial grid
+%      dr [ft] = sqrt(eta [ft^2/s] * dt_grid [s])
+% --------------------------------------------------------------------------
 eta        = computeHydraulicDiffusivity(k_mD, phi, mu_o_cP, ct_psi);
 [G, dr_ft] = buildRadialGrid(rw_ft, re_ft, eta, dt_grid, H_ft, 'Ntheta', 12);
 
-fprintf('  eta = %.0f ft^2/day\n', eta);
-fprintf('  dr  = %.1f ft   (%d radial cells)\n', dr_ft, G.radial.Nr);
+fprintf('  eta = %.4f ft^2/s\n', eta);
+fprintf('  dr  = %.3f ft   (%d radial cells)\n', dr_ft, G.radial.Nr);
 
 %% -------------------------------------------------------------------------
-%  3.  Rock and single-phase oil fluid
+%  4.  Rock and single-phase oil fluid
 % --------------------------------------------------------------------------
 rock  = makeHomogeneousRock(G, k_mD, phi);
 
@@ -48,7 +52,7 @@ fluid = initSingleFluid('mu',  mu_o_cP    * centi * poise, ...
                          'rho', rho_o_lbft * pound / ft^3);
 
 %% -------------------------------------------------------------------------
-%  4.  Well: BHP-controlled producer in the innermost radial ring
+%  5.  Well: BHP-controlled producer in the innermost radial ring
 % --------------------------------------------------------------------------
 rc         = sqrt(G.cells.centroids(:,1).^2 + G.cells.centroids(:,2).^2);
 r_min      = min(rc);
@@ -63,7 +67,7 @@ W = addWell([], G, rock, prod_cells,         ...
     'Name',         'PROD');
 
 %% -------------------------------------------------------------------------
-%  5.  Boundary condition: constant pressure at outer radial ring
+%  6.  Boundary condition: constant pressure at outer radial ring
 % --------------------------------------------------------------------------
 bf          = any(G.faces.neighbors == 0, 2);
 fr          = sqrt(G.faces.centroids(:,1).^2 + G.faces.centroids(:,2).^2);
@@ -72,18 +76,18 @@ outer_faces = find(bf & fr >= (re_ft * ft) * (1 - 1e-6));
 bc = addBC([], outer_faces, 'pressure', p_e_psia * psia, 'sat', 1);
 
 %% -------------------------------------------------------------------------
-%  6.  Initial state and transmissibilities
+%  7.  Initial state and transmissibilities
 % --------------------------------------------------------------------------
 state = initState(G, W, p_e_psia * psia, 1);   % uniform pressure, all oil
 hT    = computeTrans(G, rock);
 
 %% -------------------------------------------------------------------------
-%  7.  Single pressure solve  (incompressible steady-state)
+%  8.  Single pressure solve  (incompressible steady-state)
 % --------------------------------------------------------------------------
 state = incompTPFA(state, G, hT, fluid, 'wells', W, 'bc', bc);
 
 %% -------------------------------------------------------------------------
-%  8.  Analytical solution  (Dupuit-Thiem)
+%  9.  Analytical solution  (Dupuit-Thiem)
 % --------------------------------------------------------------------------
 r_ana_ft   = logspace(log10(rw_ft), log10(re_ft), 300);
 p_ana_psia = p_bhp_psia + (p_e_psia - p_bhp_psia) .* ...
@@ -99,7 +103,7 @@ Q_ana_SI   = 2*pi * k_SI * H_SI * dP_SI / (mu_SI * log(re_ft / rw_ft));
 Q_ana_STBd = convertTo(Q_ana_SI, stb / day);
 
 %% -------------------------------------------------------------------------
-%  9.  Extract MRST pressure profile  (azimuthal average per radial ring)
+%  10. Extract MRST pressure profile  (azimuthal average per radial ring)
 % --------------------------------------------------------------------------
 [rc_s, ord] = sort(rc);
 p_s         = state.pressure(ord);
@@ -128,7 +132,7 @@ fprintf('  Error:                     %.2f %%\n', ...
     100 * abs(Q_mrst_STBd - Q_ana_STBd) / Q_ana_STBd);
 
 %% -------------------------------------------------------------------------
-%  10. Plot: pressure profile vs radius
+%  11. Plot: pressure profile vs radius
 % --------------------------------------------------------------------------
 figure('Name', 'Radial Oil Producer – Pressure Profile');
 
