@@ -38,7 +38,7 @@ c:\MRST\
 ├── wells/                             (future well helpers)
 ├── utils/                             (future post-processing helpers)
 ├── cases/
-│   └── case01_radial_waterflood.m     1-D radial waterflood demo
+│   └── case01_radial_oil_producer.m   Steady-state single-phase oil producer + Dupuit-Thiem validation
 └── output/                            Gitignored; write simulation results here
 ```
 
@@ -75,8 +75,15 @@ Smaller `dt_grid` → finer grid. Typical usage: set `dt_grid` so that `Nr` (rad
 
 Grid is built with `tensorGrid` in `(theta, r, z)` space, then nodes are transformed to Cartesian `(x, y, z)` before `computeGeometry`.  MRST grid coordinates are always meters.
 
-## Simulation workflow (sequential splitting)
+## Simulation workflows
 
+**Single-phase (steady-state) — one solve:**
+```matlab
+hT    = computeTrans(G, rock);
+state = incompTPFA(state, G, hT, fluid, 'wells', W, 'bc', bc);
+```
+
+**Two-phase (sequential splitting) — time loop:**
 ```matlab
 hT = computeTrans(G, rock);          % once before the loop
 for i = 1 : nstep
@@ -86,6 +93,19 @@ end
 ```
 
 Note: `incompTPFA` and `implicitTransport` use lowercase `'wells'` key.
+
+**Single-phase fluid:**
+```matlab
+fluid = initSingleFluid('mu', mu_o_cP * centi * poise, 'rho', rho_o * pound / ft^3);
+state = initState(G, W, p_psia * psia, 1);          % saturation = 1 (all oil)
+bc    = addBC([], faces, 'pressure', p_psia * psia, 'sat', 1);
+```
+
+**Production rate from wellSol:**
+```matlab
+Q_SI    = -sum(state.wellSol(1).flux);               % negative flux = outflow
+Q_STBd  = convertTo(Q_SI, stb / day);
+```
 
 ## Boundary conditions on the radial grid
 
@@ -101,7 +121,7 @@ Top/bottom and azimuthal-seam faces are no-flow by default (correct for symmetri
 
 ## Adding a new case
 
-1. Copy `cases/case01_radial_waterflood.m` as a starting point.
+1. Copy `cases/case01_radial_oil_producer.m` as a starting point.
 2. Keep `run('c:\MRST\startup.m')` and `gravity off` at the top.
 3. Specify all parameters in imperial units; use MRST unit functions for conversions.
 4. Write output files to `output/` (gitignored).
